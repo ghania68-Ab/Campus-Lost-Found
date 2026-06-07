@@ -1,0 +1,400 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../services/cloudinary_service.dart';
+
+import '../found/found_report_screen.dart';
+
+class LostReportScreen extends StatefulWidget {
+  const LostReportScreen({super.key});
+
+  @override
+  State<LostReportScreen> createState() => _LostReportScreenState();
+}
+
+class _LostReportScreenState extends State<LostReportScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  final TextEditingController titleController = TextEditingController();
+  final TextEditingController locationController = TextEditingController();
+  final TextEditingController dateController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
+
+  String? selectedCategory;
+
+  final List<String> categories = [
+    'Electronics',
+    'Accessories',
+    'Keys',
+    'IDs & Cards',
+    'Books',
+    'Other',
+  ];
+
+  // =========================
+  // CLOUDINARY + IMAGE STATE
+  // =========================
+  File? selectedImage;
+  final ImagePicker _picker = ImagePicker();
+  final CloudinaryService _cloudinaryService = CloudinaryService();
+  bool isUploading = false;
+
+  Future<void> pickImage(ImageSource source) async {
+    final pickedFile = await _picker.pickImage(source: source);
+
+    if (pickedFile != null) {
+      setState(() {
+        selectedImage = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<void> submitReport() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      isUploading = true;
+    });
+
+    String? imageUrl;
+
+    if (selectedImage != null) {
+      imageUrl = await _cloudinaryService.uploadImage(selectedImage!);
+    }
+
+    setState(() {
+      isUploading = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          imageUrl != null
+              ? "Lost item submitted with image"
+              : "Lost item submitted without image",
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7FB),
+
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+
+          child: Form(
+            key: _formKey,
+
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                /// TOP BAR
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(
+                        Icons.arrow_back_ios,
+                        size: 18,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      "Report item",
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                /// TOGGLE (UNCHANGED)
+                Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFE6E0),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              "I Lost Something",
+                              style: TextStyle(
+                                color: Color(0xFFFF4D1A),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const FoundReportScreen(),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                "I Found Something",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 22),
+
+                /// IMAGE UPLOAD (NOW WORKING)
+                GestureDetector(
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      builder: (context) {
+                        return SafeArea(
+                          child: Wrap(
+                            children: [
+                              ListTile(
+                                leading: const Icon(Icons.photo),
+                                title: const Text("Pick from Gallery"),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  pickImage(ImageSource.gallery);
+                                },
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.camera_alt),
+                                title: const Text("Take Photo"),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  pickImage(ImageSource.camera);
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFFFD2C7)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.08),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: selectedImage != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: Image.file(
+                              selectedImage!,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                            ),
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.camera_alt_outlined,
+                                size: 28,
+                                color: Colors.deepOrange.shade400,
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                "Add photos",
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "or take a picture",
+                                style: TextStyle(
+                                  color: Colors.grey.shade500,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+
+                const SizedBox(height: 25),
+
+                /// ITEM TITLE
+                const Text("Item Title"),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: titleController,
+                  validator: (value) =>
+                      value!.isEmpty ? "Enter item title" : null,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                /// CATEGORY
+                const Text("Category"),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  items: categories
+                      .map((c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(c),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      selectedCategory = value;
+                    });
+                  },
+                  validator: (value) =>
+                      value == null ? "Select category" : null,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                /// LOCATION
+                const Text("Lost Location"),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: locationController,
+                  validator: (value) =>
+                      value!.isEmpty ? "Enter location" : null,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                /// DATE
+                const Text("Date"),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: dateController,
+                  validator: (value) =>
+                      value!.isEmpty ? "Enter date" : null,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                /// DESCRIPTION
+                const Text("Description"),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: descriptionController,
+                  maxLines: 4,
+                  validator: (value) =>
+                      value!.isEmpty ? "Enter description" : null,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                /// SUBMIT BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: isUploading ? null : submitReport,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF4D1A),
+                    ),
+                    child: Text(
+                      isUploading ? "Uploading..." : "Submit Report",
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
