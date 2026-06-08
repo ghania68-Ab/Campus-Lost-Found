@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../details/item_details_screen.dart';
 
 class LostItemsScreen extends StatefulWidget {
@@ -11,43 +13,17 @@ class LostItemsScreen extends StatefulWidget {
 class _LostItemsScreenState extends State<LostItemsScreen> {
   String selectedCategory = "All";
 
-  final List<Map<String, String>> allItems = [
-    {
-      "category": "Accessories",
-      "image": "assets/images/wallet.png",
-      "title": "Black Leather Wallet",
-      "description": "Lost near library entrance.",
-      "location": "Library Entrance",
-      "date": "May 31",
-    },
-    {
-      "category": "Keys",
-      "image": "assets/images/keys.png",
-      "title": "Dorm Keys with Red Keychain",
-      "description": "Lost between cafeteria and Block C.",
-      "location": "Cafeteria & Block C",
-      "date": "Jun 1",
-    },
-    {
-      "category": "Electronics",
-      "image": "assets/images/macbook.png",
-      "title": "MacBook Pro 14\"",
-      "description": "Contains cat sticker on lid.",
-      "location": "Block A",
-      "date": "May 27",
-    },
-  ];
+  Stream<QuerySnapshot> getLostItems() {
+    return FirebaseFirestore.instance
+        .collection("posts")
+        .where("type", isEqualTo: "lost")
+        .where("status", isEqualTo: "active")
+        .snapshots();
+  }
 
-  List<Map<String, String>> get filteredItems {
-    if (selectedCategory == "All") {
-      return allItems;
-    }
-    if (selectedCategory == "IDs & Cards") {
-      return []; // no lost items in this category
-    }
-    return allItems
-        .where((item) => item["category"] == selectedCategory)
-        .toList();
+  bool matchCategory(String itemCategory) {
+    if (selectedCategory == "All") return true;
+    return itemCategory == selectedCategory;
   }
 
   @override
@@ -76,7 +52,7 @@ class _LostItemsScreenState extends State<LostItemsScreen> {
 
           const SizedBox(height: 10),
 
-          /// SEARCH BAR
+          /// SEARCH BAR (UI only for now)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
@@ -96,7 +72,7 @@ class _LostItemsScreenState extends State<LostItemsScreen> {
 
           const SizedBox(height: 15),
 
-          /// CATEGORY CHIPS (NOW CLICKABLE)
+          /// CATEGORY CHIPS
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -113,72 +89,52 @@ class _LostItemsScreenState extends State<LostItemsScreen> {
 
           const SizedBox(height: 15),
 
-          /// ITEMS LIST
+          /// FIRESTORE LIST
           Expanded(
-            child: filteredItems.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
+            child: StreamBuilder<QuerySnapshot>(
+              stream: getLostItems(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                        Icon(
-                          Icons.search_off,
-                          size: 80,
-                          color: Colors.grey,
-                        ),
+                final docs = snapshot.data!.docs;
 
-                        SizedBox(height: 15),
+                // filter by category
+                final filteredDocs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final category = data["category"] ?? "Other";
+                  return matchCategory(category);
+                }).toList();
 
-                        Text(
-                          "No items found",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
-                          ),
-                        ),
-
-                        SizedBox(height: 8),
-
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 30),
-                          child: Text(
-                            "Try selecting a different category and search item",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
-                      ],
+                if (filteredDocs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      "No items found",
+                      style: TextStyle(color: Colors.grey),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredItems.length,
-                    itemBuilder: (context, index) {
-                      final item = filteredItems[index];
+                  );
+                }
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _itemCard(
-                          image: item["image"]!,
-                          title: item["title"]!,
-                          description: item["description"]!,
-                          location: item["location"]!,
-                          date: item["date"]!,
-                        ),
-                      );
-                    },
-                  ),
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (context, index) {
+                    final data =
+                        filteredDocs[index].data() as Map<String, dynamic>;
+
+                    return _itemCard(data);
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// CHIP WITH FILTER LOGIC
+  /// CHIP
   Widget _chip(String text) {
     final bool isActive = selectedCategory == text;
 
@@ -206,154 +162,133 @@ class _LostItemsScreenState extends State<LostItemsScreen> {
     );
   }
 
-  /// ITEM CARD (UNCHANGED UI)
-  Widget _itemCard({
-  required String image,
-  required String title,
-  required String description,
-  required String location,
-  required String date,
-}) {
-  return InkWell(
-    borderRadius: BorderRadius.circular(18),
-    onTap: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ItemDetailsScreen(
-            image: image,
-            title: title,
-            status: "Lost",
-            category: title.contains("MacBook")
-                ? "Electronics"
-                : title.contains("Keys")
-                    ? "Keys"
-                    : "Accessories",
-            location: location,
-            date: date,
-            description: description,
-            ownerName: "Ghania Jawed",
-            email: "ghania@example.com",
-            phone: "+92 300 1234567",
+  /// ITEM CARD (NOW FROM FIRESTORE)
+  Widget _itemCard(Map<String, dynamic> data) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ItemDetailsScreen(
+              image: data["imageUrl"] ?? "",
+              title: data["title"] ?? "",
+              status: "Lost",
+              category: data["category"] ?? "Other",
+              location: data["location"] ?? "",
+              date: data["date"] ?? "",
+              description: data["description"] ?? "",
+              ownerName: "User",
+              email: "user@email.com",
+              phone: "",
+            ),
           ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
         ),
-      );
-    },
-    child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
+        child: Row(
+          children: [
 
-          Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
+            ClipRRect(
               borderRadius: BorderRadius.circular(12),
+              child: data["imageUrl"] != null
+                  ? Image.network(
+                      data["imageUrl"],
+                      width: 70,
+                      height: 70,
+                      fit: BoxFit.cover,
+                    )
+                  : const Icon(Icons.image, size: 60),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                image,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
 
-          const SizedBox(width: 12),
+            const SizedBox(width: 12),
 
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
 
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  description,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                Row(
-                  children: [
-
-                    const Icon(
-                      Icons.location_on,
-                      size: 14,
-                      color: Colors.grey,
+                  Text(
+                    data["title"] ?? "",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
                     ),
+                  ),
 
-                    Expanded(
-                      child: Text(
-                        location,
+                  const SizedBox(height: 4),
+
+                  Text(
+                    data["description"] ?? "",
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Row(
+                    children: [
+
+                      const Icon(
+                        Icons.location_on,
+                        size: 14,
+                        color: Colors.grey,
+                      ),
+
+                      Expanded(
+                        child: Text(
+                          data["location"] ?? "",
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+
+                      Text(
+                        data["date"] ?? "",
                         style: const TextStyle(
                           fontSize: 11,
                           color: Colors.grey,
                         ),
                       ),
-                    ),
-
-                    Text(
-                      date,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color:
-                  Colors.red.withOpacity(0.15),
-              borderRadius:
-                  BorderRadius.circular(20),
-            ),
-            child: const Text(
-              "Lost",
-              style: TextStyle(
-                color: Colors.red,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
+                    ],
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+
+            const SizedBox(width: 8),
+
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                "Lost",
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'signin_screen.dart';
 import '../home/home_screen.dart';
 
@@ -16,45 +19,75 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController semesterController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  bool _isPasswordHidden = true;
 
-  void _signUp() {
-    String name = nameController.text.trim();
-    String email = emailController.text.trim();
-    String dept = deptController.text.trim();
-    String semester = semesterController.text.trim();
-    String phone = phoneController.text.trim();
-    String password = passwordController.text.trim();
+  Future<void> _signUp() async {
+  String name = nameController.text.trim();
+  String email = emailController.text.trim();
+  String dept = deptController.text.trim();
+  String semester = semesterController.text.trim();
+  String phone = phoneController.text.trim();
+  String password = passwordController.text.trim();
 
-    if (name.isEmpty ||
-        email.isEmpty ||
-        dept.isEmpty ||
-        semester.isEmpty ||
-        phone.isEmpty ||
-        password.isEmpty) {
-      _showMessage("Please fill all fields");
-      return;
-    }
+  if (name.isEmpty ||
+      email.isEmpty ||
+      dept.isEmpty ||
+      semester.isEmpty ||
+      phone.isEmpty ||
+      password.isEmpty) {
+    _showMessage("Please fill all fields");
+    return;
+  }
 
-    if (!email.contains("@")) {
-      _showMessage("Enter a valid email");
-      return;
-    }
+  if (!email.contains("@")) {
+    _showMessage("Enter a valid email");
+    return;
+  }
 
-    if (phone.length < 10) {
-      _showMessage("Enter a valid phone number");
-      return;
-    }
+  if (phone.length < 10) {
+    _showMessage("Enter a valid phone number");
+    return;
+  }
 
-    if (password.length < 6) {
-      _showMessage("Password must be at least 6 characters");
-      return;
-    }
+  if (password.length < 6) {
+    _showMessage("Password must be at least 6 characters");
+    return;
+  }
+
+  try {
+    UserCredential userCredential =
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userCredential.user!.uid)
+        .set({
+      'uid': userCredential.user!.uid,
+      'name': name,
+      'email': email,
+      'department': dept,
+      'semester': semester,
+      'phone': phone,
+      'createdAt': Timestamp.now(),
+    });
+
+    _showMessage("Account Created Successfully");
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      MaterialPageRoute(
+        builder: (context) => const HomeScreen(),
+      ),
     );
+  } on FirebaseAuthException catch (e) {
+    _showMessage(e.message ?? "Signup Failed");
+  } catch (e) {
+    _showMessage("Error: $e");
   }
+}
 
   void _showMessage(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -237,15 +270,24 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 // Password
                 TextField(
                   controller: passwordController,
-                  obscureText: true,
+                  obscureText: _isPasswordHidden,
                   decoration: InputDecoration(
                     hintText: 'Create Password',
                     prefixIcon: const Icon(
                       Icons.lock_outline,
                       color: Color(0xFF2563EB),
                     ),
-                    suffixIcon: const Icon(
-                      Icons.visibility_off_outlined,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordHidden
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isPasswordHidden = !_isPasswordHidden;
+                        });
+                      },
                     ),
                     filled: true,
                     fillColor: Colors.white,

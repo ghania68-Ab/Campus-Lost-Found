@@ -7,8 +7,39 @@ import '../found/found_report_screen.dart';
 import 'all_items_screen.dart';
 import '../details/item_details_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+
+
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String get userId => FirebaseAuth.instance.currentUser!.uid; //use this ONLY if user is always logged in
+  Stream<int> getLostCount() {
+    return FirebaseFirestore.instance
+        .collection("posts")
+        .where("userId", isEqualTo: userId)
+        .where("type", isEqualTo: "lost")
+        .where("status", isEqualTo: "active")
+        .snapshots()
+        .map((snap) => snap.docs.length);
+  }
+
+  Stream<int> getFoundCount() {
+    return FirebaseFirestore.instance
+        .collection("posts")
+        .where("userId", isEqualTo: userId)
+        .where("type", isEqualTo: "found")
+        .where("status", isEqualTo: "active")
+        .snapshots()
+        .map((snap) => snap.docs.length);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -248,25 +279,30 @@ class HomeScreen extends StatelessWidget {
                       children: [
 
                         Expanded(
-                          child: _statCard(
-                            title:
-                                "Active Lost",
-                            count: "2",
-                            color:
-                                Colors.red,
+                          child: StreamBuilder<int>(
+                            stream: getLostCount(),
+                            builder: (context, snapshot) {
+                              return _statCard(
+                                title: "Active Lost",
+                                count: snapshot.data?.toString() ?? "0",
+                                color: Colors.red,
+                              );
+                            },
                           ),
                         ),
 
-                        const SizedBox(
-                            width: 15),
+                        const SizedBox(width: 15),
 
                         Expanded(
-                          child: _statCard(
-                            title:
-                                "Active Found",
-                            count: "1",
-                            color:
-                                Colors.green,
+                          child: StreamBuilder<int>(
+                            stream: getFoundCount(),
+                            builder: (context, snapshot) {
+                              return _statCard(
+                                title: "Active Found",
+                                count: snapshot.data?.toString() ?? "0",
+                                color: Colors.green,
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -409,35 +445,40 @@ class HomeScreen extends StatelessWidget {
 
                     const SizedBox(height: 15),
 
-                    _activityCard(
-                      image: 'assets/images/wallet.png',
-                      title: 'Black Leather Wallet',
-                      type: 'Lost',
-                      location: 'Library Entrance',
-                      date: 'May 31',
-                      color: Colors.red,
-                    ),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection("reports")
+                          .orderBy("createdAt", descending: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
 
-                    const SizedBox(height: 12),
+                        var docs = snapshot.data!.docs;
 
-                    _activityCard(
-                      image: 'assets/images/keys.png',
-                      title: 'Dorm Keys',
-                      type: 'Lost',
-                      location: 'Mid Cafeteria & Block C',
-                      date: 'Jun 1',
-                      color: Colors.red,
-                    ),
+                        return ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: docs.length,
+                          itemBuilder: (context, index) {
+                            var data = docs[index];
 
-                    const SizedBox(height: 12),
-
-                    _activityCard(
-                      image: 'assets/images/card.png',
-                      title: 'Student ID Card',
-                      type: 'Found',
-                      location: 'Near Gym',
-                      date: 'Jun 1',
-                      color: Colors.green,
+                            return _activityCard(
+                              image: data["imageUrl"] == ""
+                                  ? 'assets/images/wallet.png'
+                                  : data["imageUrl"],
+                              title: data["title"],
+                              type: data["type"],
+                              location: data["location"],
+                              date: data["date"],
+                              color: data["type"] == "lost"
+                                  ? Colors.red
+                                  : Colors.green,
+                            );
+                          },
+                        );
+                      },
                     ),
 
                     const SizedBox(height: 100),
@@ -536,12 +577,9 @@ static Widget _activityCard({
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  image,
-                  width: 65,
-                  height: 65,
-                  fit: BoxFit.cover,
-                ),
+                child: image.startsWith("http")
+                          ? Image.network(image, width: 65, height: 65, fit: BoxFit.cover)
+                          : Image.asset(image, width: 65, height: 65, fit: BoxFit.cover),
               ),
 
               const SizedBox(width: 12),

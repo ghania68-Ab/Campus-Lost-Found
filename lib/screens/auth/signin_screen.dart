@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'signup_screen.dart';
 import '../home/home_screen.dart';
 
@@ -8,12 +10,14 @@ class SignInScreen extends StatefulWidget {
   @override
   State<SignInScreen> createState() => _SignInScreenState();
 }
-
 class _SignInScreenState extends State<SignInScreen> {
+
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
-  void _signIn() {
+  bool _obscurePassword = true;
+
+  Future<void> _signIn() async {
     String email = emailController.text.trim();
     String password = passwordController.text.trim();
 
@@ -22,20 +26,25 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
 
-    if (!email.contains("@")) {
-      _showMessage("Enter a valid email");
-      return;
-    }
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-    if (password.length < 6) {
-      _showMessage("Password must be at least 6 characters");
-      return;
-    }
+      _showMessage("Login Successful");
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-    );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const HomeScreen(),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      _showMessage(e.message ?? "Login failed");
+    } catch (e) {
+      _showMessage(e.toString());
+    }
   }
 
   void _showMessage(String msg) {
@@ -125,14 +134,27 @@ class _SignInScreenState extends State<SignInScreen> {
 
                 TextField(
                   controller: passwordController,
-                  obscureText: true,
+                  obscureText: _obscurePassword,
                   decoration: InputDecoration(
                     hintText: 'Password',
                     prefixIcon: const Icon(
                       Icons.lock_outline,
                       color: Color(0xFF2563EB),
                     ),
-                    suffixIcon: const Icon(Icons.visibility_off_outlined),
+
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+
                     filled: true,
                     fillColor: Colors.white,
                     border: OutlineInputBorder(

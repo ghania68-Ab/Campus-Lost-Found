@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/cloudinary_service.dart';
 
 import '../found/found_report_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LostReportScreen extends StatefulWidget {
   const LostReportScreen({super.key});
@@ -52,9 +54,7 @@ class _LostReportScreenState extends State<LostReportScreen> {
   Future<void> submitReport() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      isUploading = true;
-    });
+    setState(() => isUploading = true);
 
     String? imageUrl;
 
@@ -62,19 +62,28 @@ class _LostReportScreenState extends State<LostReportScreen> {
       imageUrl = await _cloudinaryService.uploadImage(selectedImage!);
     }
 
-    setState(() {
-      isUploading = false;
+    final user = FirebaseAuth.instance.currentUser;
+
+    await FirebaseFirestore.instance.collection("posts").add({
+      "title": titleController.text.trim(),
+      "category": selectedCategory,
+      "location": locationController.text.trim(),
+      "date": dateController.text.trim(),
+      "description": descriptionController.text.trim(),
+      "imageUrl": imageUrl ?? "",
+      "type": "lost",
+      "status": "active",
+      "userId": user?.uid,
+      "createdAt": FieldValue.serverTimestamp(),
     });
 
+    setState(() => isUploading = false);
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          imageUrl != null
-              ? "Lost item submitted with image"
-              : "Lost item submitted without image",
-        ),
-      ),
+      const SnackBar(content: Text("Lost item posted successfully")),
     );
+
+    Navigator.pop(context);
   }
 
   @override

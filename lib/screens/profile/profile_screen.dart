@@ -170,14 +170,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     horizontal: 10,
                     vertical: 4,
                   ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    "4",
-                    style: TextStyle(color: Colors.white),
-                  ),
+                  
+                  
                 ),
                 onTap: () {
                   Navigator.push(

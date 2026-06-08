@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../details/item_details_screen.dart';
 
@@ -11,47 +13,15 @@ class FoundItemsScreen extends StatefulWidget {
 class _FoundItemsScreenState extends State<FoundItemsScreen> {
   String selectedCategory = "All";
 
-  final List<Map<String, String>> allItems = [
+  final userId = FirebaseAuth.instance.currentUser?.uid;
 
-    {
-      "category": "IDs & Cards",
-      "image": "assets/images/card.png",
-      "title": "Student ID Card",
-      "description": "Found a student ID near the Gym.",
-      "location": "Near Gym",
-      "date": "Jun 1",
-    },
-    {
-      "category": "Accessories",
-      "image": "assets/images/bottle.png",
-      "title": "Blue Water Bottle",
-      "description": "Found near student seating area.",
-      "location": "Block A Bench",
-      "date": "May 31",
-    },
-    {
-      "category": "Accessories",
-      "image": "assets/images/umbrella.png",
-      "title": "Umbrella",
-      "description": "Found outside admin block.",
-      "location": "Admin Block",
-      "date": "May 29",
-    },
-  ];
-
-  List<Map<String, String>> get filteredItems {
-    if (selectedCategory == "All") {
-      return allItems;
-    }
-    if (selectedCategory == "Keys") {
-      return []; // no found items in keys
-    }
-    if (selectedCategory == "Electronics") {
-      return []; // no electronics found items
-    }
-    return allItems
-        .where((item) => item["category"] == selectedCategory)
-        .toList();
+  Stream<QuerySnapshot> getFoundItems() {
+    return FirebaseFirestore.instance
+        .collection("posts")
+        .where("type", isEqualTo: "found")
+        .where("status", isEqualTo: "active")
+        .where("userId", isEqualTo: userId)
+        .snapshots();
   }
 
   @override
@@ -80,14 +50,13 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
 
           const SizedBox(height: 10),
 
-          /// SEARCH BAR
+          /// SEARCH BAR (UI only for now)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
               decoration: InputDecoration(
                 hintText: "search found items...",
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: const Icon(Icons.tune),
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(
@@ -100,89 +69,51 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
 
           const SizedBox(height: 15),
 
-          /// CHIPS (CLICKABLE)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                _chip("All"),
-                _chip("Electronics"),
-                _chip("Accessories"),
-                _chip("Keys"),
-                _chip("IDs & Cards"),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 15),
-
-          /// LIST
+          /// STREAM DATA
           Expanded(
-            child: filteredItems.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
+            child: StreamBuilder<QuerySnapshot>(
+              stream: getFoundItems(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                        Icon(
-                          Icons.search_off,
-                          size: 80,
-                          color: Colors.grey,
-                        ),
+                final docs = snapshot.data!.docs;
 
-                        SizedBox(height: 15),
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text("No found items yet"),
+                  );
+                }
 
-                        Text(
-                          "No items found",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
-                          ),
-                        ),
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final data =
+                        docs[index].data() as Map<String, dynamic>;
 
-                        SizedBox(height: 8),
-
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 30),
-                          child: Text(
-                            "Try selecting a different category and search item",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredItems.length,
-                    itemBuilder: (context, index) {
-                      final item = filteredItems[index];
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _itemCard(
-                          image: item["image"]!,
-                          title: item["title"]!,
-                          description: item["description"]!,
-                          location: item["location"]!,
-                          date: item["date"]!,
-                        ),
-                      );
-                    },
-                  ),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _itemCard(
+                        image: data["imageUrl"] ?? "",
+                        title: data["title"] ?? "",
+                        description: data["description"] ?? "",
+                        location: data["location"] ?? "",
+                        date: data["date"] ?? "",
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// CHIP WITH FILTER
+  /// CHIP (kept same UI)
   Widget _chip(String text) {
     final bool isActive = selectedCategory == text;
 
@@ -210,119 +141,119 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
     );
   }
 
-  /// ITEM CARD (UNCHANGED UI)
+  /// ITEM CARD (UPDATED FOR FIRESTORE)
   Widget _itemCard({
-  required String image,
-  required String title,
-  required String description,
-  required String location,
-  required String date,
-}) {
-  return InkWell(
-    borderRadius: BorderRadius.circular(18),
-    onTap: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ItemDetailsScreen(
-            image: image,
-            title: title,
-            status: "Found",
-            category: "Accessories",
-            location: location,
-            date: date,
-            description: description,
-            ownerName: "Ali Ahmed",
-            phone: "+92 300 1234567",
-            email: "ali@example.com",
-          ),
-        ),
-      );
-    },
-    child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-
-          Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+    required String image,
+    required String title,
+    required String description,
+    required String location,
+    required String date,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ItemDetailsScreen(
+              image: image,
+              title: title,
+              status: "Found",
+              category: "Accessories",
+              location: location,
+              date: date,
+              description: description,
+              ownerName: "Ali Ahmed",
+              phone: "+92 300 1234567",
+              email: "ali@example.com",
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                image,
-                fit: BoxFit.cover,
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+
+            /// IMAGE (Cloudinary)
+            image.isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      image,
+                      width: 70,
+                      height: 70,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : const Icon(Icons.image, size: 70),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    description,
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        size: 14,
+                        color: Colors.grey,
+                      ),
+
+                      const SizedBox(width: 4),
+
+                      Expanded(
+                        child: Text(
+                          location,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+
+                      Text(
+                        date,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ),
-
-          const SizedBox(width: 12),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  description,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      size: 14,
-                      color: Colors.grey,
-                    ),
-
-                    Text(
-                      location,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey,
-                      ),
-                    ),
-
-                    const Spacer(),
-
-                    Text(
-                      date,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
